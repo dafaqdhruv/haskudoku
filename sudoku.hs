@@ -2,19 +2,21 @@ import Data.List
 main :: IO ()
 main = return ()
 
--- Declare types : Sudoku Board, Rows, collums, boxes
-
+-- Declare types : Sudoku Board, Rows, columns, boxes
 type Matrix a = [[a]]
 type Board = Matrix Char
 type Choices = [Char]
 
+-- Declare Universal Constants
 boardSize = 9
 boxSize = 3
 cellvals = "123456789"
 blank e = e == '.'
 
-gentle :: Board
-gentle = ["2....1.38",
+
+-- Sample boards
+sample :: Board
+sample = ["2....1.38",
           "........5",
           ".7...6...",
           ".......13",
@@ -24,12 +26,34 @@ gentle = ["2....1.38",
           ".5..69784",
           "4..25...."]
                                                                                                                                
+sample2 :: Board
+sample2 =   [".9.7..86.",
+             ".31..5.2.",
+             "8.6......",
+             "..7.5...6",
+             "...3.7...",
+             "5...1.7..",
+             "......1.9",
+             ".2.6..35.",
+             ".54..8.7."]
+
+sampleHard :: Board
+sampleHard =  [ "1..9.7..3",
+                ".8.....7.",
+                "..9...6..",
+                "..72.94..",
+                "41.....95",
+                "..85.43..",
+                "..3...7..",
+                ".5.....4.",
+                "2..8.6..9"]
 
 
--- define a row, collumn and boxes
+
+
+-- define a function to get rows, collumns and boxes of a board
 rows :: Matrix a -> Matrix a
 rows = id
-
 
 cols :: Matrix a -> Matrix a
 cols [] = []
@@ -38,13 +62,18 @@ cols (xs : xss) = zipWith (:) xs (cols xss)
 
 boxs :: Matrix a -> Matrix a
 boxs x = map ungroup2 ( ungroup2 ( map cols (group2  (map group2 x ))))
+-- Group2 and ungroup2 instead of group and ungroup  
+-- avoids clashes with prelude
 
 
 
--- group2 and return
+
+-- group2 : groups a list into length  of boxsize (here 3)
+-- (1..9) => (1..3), (4..6), (7..9)
 group2 :: [a] -> [[a]]
-group2 xs = group2By  (floor (sqrt (fromIntegral (length xs)))) xs -- ToDo : Definition of group2By
+group2 = group2By boxSize 
 
+-- ungroup2 : combines list of lists in one
 ungroup2 :: [[a]] -> [a]
 ungroup2 = concat
 
@@ -54,6 +83,11 @@ group2By n xs = as : group2By n bs
   where (as,bs) = splitAt n xs
 
 
+
+
+-- CHECKERS
+--
+--
 -- nodups checks for any duplicates in a given list
 nodups :: Eq a => [a] -> Bool
 nodups [] = True
@@ -66,15 +100,24 @@ correct b = all nodups (rows b) &&  all nodups (cols b) &&  all nodups (boxs b)
 
 
 
+
+-- Solver
 -- Function takes input board, returns list of possible solutions
-sudoku :: Board -> [Board]
-sudoku o = [o]
+sudoku :: Int -> Board -> [Board]
+sudoku x  
+  | x == 3 = sol3
+  | x == 4 = sol4
+  | otherwise = sol2 
 
 
 
+----------------------------------------------------------------------------------------------------------------
 
 
--- generate choices for blank values
+
+-- Generate choices for blank values
+-- Results in a matrix of choices
+--
 choices :: Board -> Matrix Choices
 choices = map (map choose)
 choose e = if blank e then cellvals else [e]
@@ -87,38 +130,52 @@ fixed = concat.filter single
 single :: [a] -> Bool
 single xs = length xs == 1
 
--- remove single, fixed elements
+-- Removes unfavorable choices
+-- (remove single, fixed elements)
 reduce :: [Choices] -> [Choices]
 reduce xss = [xs `minus` singles | xs <- xss]
   where singles = concat (filter single xss)
 
+
+-- Given 2 sets A & B, Perform A-B 
+-- {x | x belongs to A but not to B }
+--
 minus :: Choices -> Choices -> Choices
 xs `minus` ys = if single xs then xs else xs \\ ys 
 -- \\ is the list difference operator
 -- xs \\ ys removes all the first occurences of each element of ys from xs
 
 
--- Now to define a function prune that results in the same answer as previous but, quicker
+-- Prune choices that already occur in row/col/box 
 prune :: Matrix Choices -> Matrix Choices
-prune = pruneBy boxs . pruneBy cols . pruneBy rows
+prune = pruneBy boxs 
+      . pruneBy cols 
+      . pruneBy rows
   where pruneBy f = f . map reduce . f
 
 
--- cartesian product
+-- Cartesian Product of two lists
+-- A x B => all possible (a,b) 
+-- where a <- A && b <- B
 cp :: [[a]] -> [[a]]
 cp [] = [[]]
 cp (xs : xss)  = [y : ys | y<-xs, ys<-cp xss]
 
+-- Matrix of choices -> Choice of matrix
 collapse :: Matrix [a] -> [Matrix a]
 collapse = cp . map cp
+
 -- Prune the choies that already occur in row/col/box
 sol2  :: Board -> [Board]
 sol2 = filter correct . collapse . prune . choices
 
 
+
+
 -- Repeated Pruning
 sol3 :: Board -> [Board]
 sol3 = filter correct . collapse . fix prune . choices
+
 fix :: Eq a => (a->a) -> a -> a
 fix f x = if x == x' then x else fix f x'
   where x' = f x
@@ -126,6 +183,10 @@ fix f x = if x == x' then x else fix f x'
 -- Even after this though, solution is not optimal.
 -- Further evaulation required.
 
+
+
+
+----------------------------------------------------------------------------------------------------------------
 
 
 
@@ -152,7 +213,6 @@ consistent = nodups . concat . filter single
 -- A grid is blocked if it is void or unsafe
 blocked :: Matrix Choices -> Bool
 blocked m = void m || not (safe m)
-
 
 
 
